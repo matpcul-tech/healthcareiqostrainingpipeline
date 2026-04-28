@@ -3,55 +3,30 @@ import { NextRequest, NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
-// ── SEARCH TOPICS ─────────────────────────────────────────────────────────────
-// Each topic maps to a precise PubMed search query targeting the best evidence
 const TOPIC_QUERIES: Record<string, string> = {
-  longevity: 'longevity[Title] OR "healthy aging"[Title] OR "lifespan extension"[Title] AND (humans[Filter]) AND (clinical trial[pt] OR review[pt] OR systematic review[pt])',
-  prevention: '"preventive medicine"[MeSH] OR "early detection of cancer"[MeSH] OR "primary prevention"[MeSH] AND (2018:2025[pdat])',
-  metabolic: '"metabolic syndrome"[MeSH] OR "insulin resistance"[MeSH] OR "prediabetes"[Title/Abstract] AND (intervention[Title/Abstract]) AND (2018:2025[pdat])',
-  cardiovascular: '"cardiovascular diseases/prevention and control"[MeSH] OR "coronary artery calcium"[Title] OR "ApoB"[Title/Abstract] AND (2018:2025[pdat])',
+  longevity: 'longevity[Title] OR "healthy aging"[Title] AND (clinical trial[pt] OR review[pt] OR systematic review[pt]) AND (2018:2025[pdat])',
+  prevention: '"preventive medicine"[MeSH] OR "primary prevention"[MeSH] OR "early detection of cancer"[MeSH] AND (2018:2025[pdat])',
+  metabolic: '"metabolic syndrome"[MeSH] OR "insulin resistance"[MeSH] OR prediabetes[Title/Abstract] AND intervention[Title/Abstract] AND (2018:2025[pdat])',
+  cardiovascular: '"cardiovascular diseases/prevention and control"[MeSH] OR "coronary artery calcium"[Title] OR ApoB[Title/Abstract] AND (2018:2025[pdat])',
   cognitive: '"alzheimer disease/prevention and control"[MeSH] OR "cognitive decline"[Title] OR "dementia prevention"[Title/Abstract] AND (2018:2025[pdat])',
-  sleep: '"sleep/physiology"[MeSH] OR "sleep deprivation"[MeSH] OR "sleep apnea"[MeSH] AND (longevity OR mortality OR health outcomes) AND (2018:2025[pdat])',
-  exercise: '"exercise/physiology"[MeSH] OR "cardiorespiratory fitness"[Title] OR "VO2 max"[Title/Abstract] OR "resistance training"[MeSH] AND (longevity OR mortality) AND (2018:2025[pdat])',
-  nutrition: '"diet, mediterranean"[MeSH] OR "fasting"[MeSH] OR "time-restricted eating"[Title] OR "longevity diet"[Title/Abstract] AND (2018:2025[pdat])',
-  indigenous: '"american indian or alaska native"[MeSH] OR "indigenous health"[Title/Abstract] OR "tribal health"[Title/Abstract] OR "health disparities"[MeSH] AND ("preventive health services"[MeSH]) AND (2015:2025[pdat])',
-  rural: '"rural health"[MeSH] OR "rural health services"[MeSH] OR "medically underserved area"[MeSH] AND (prevention OR screening OR "chronic disease") AND (2018:2025[pdat])',
-  inflammation: '"inflammation"[MeSH] OR "C-reactive protein"[MeSH] OR "chronic inflammation"[Title/Abstract] AND (aging OR longevity OR mortality) AND (2018:2025[pdat])',
-  biomarkers: '"biological markers"[MeSH] AND (longevity OR "healthy aging" OR "disease risk") AND (2018:2025[pdat])',
-  hormones: '"testosterone"[MeSH] OR "DHEA"[MeSH] OR "growth hormone"[MeSH] AND (aging OR longevity) AND (2018:2025[pdat])',
+  sleep: '"sleep deprivation"[MeSH] OR "sleep apnea"[MeSH] OR "sleep quality"[Title/Abstract] AND (longevity OR mortality) AND (2018:2025[pdat])',
+  exercise: '"cardiorespiratory fitness"[Title] OR "VO2 max"[Title/Abstract] OR "resistance training"[MeSH] AND (longevity OR mortality) AND (2018:2025[pdat])',
+  nutrition: '"diet, mediterranean"[MeSH] OR "time-restricted eating"[Title] OR "intermittent fasting"[MeSH] AND (2018:2025[pdat])',
+  indigenous: '"american indian or alaska native"[MeSH] OR "indigenous health"[Title/Abstract] OR "tribal health"[Title/Abstract] AND "preventive health services"[MeSH] AND (2015:2025[pdat])',
+  rural: '"rural health"[MeSH] OR "medically underserved area"[MeSH] OR "health disparities"[MeSH] AND (prevention OR screening) AND (2018:2025[pdat])',
+  inflammation: '"C-reactive protein"[MeSH] OR "chronic inflammation"[Title/Abstract] OR inflammaging[Title/Abstract] AND (aging OR longevity) AND (2018:2025[pdat])',
+  biomarkers: '"biological markers"[MeSH] AND (longevity OR "healthy aging" OR "biological age") AND (2018:2025[pdat])',
+  hormones: 'testosterone[MeSH] OR DHEA[MeSH] OR "growth hormone"[MeSH] AND (aging OR longevity) AND (2018:2025[pdat])',
   microbiome: '"gastrointestinal microbiome"[MeSH] OR "gut microbiota"[Title/Abstract] AND (longevity OR aging OR "chronic disease") AND (2018:2025[pdat])',
-  telomere: '"telomere"[MeSH] OR "telomere length"[Title/Abstract] AND (aging OR longevity OR "biological age") AND (2015:2025[pdat])',
+  telomere: 'telomere[MeSH] OR "telomere length"[Title/Abstract] AND (aging OR longevity OR "biological age") AND (2015:2025[pdat])',
   epigenetics: '"epigenomics"[MeSH] OR "epigenetic clock"[Title/Abstract] OR "biological age"[Title/Abstract] AND (2018:2025[pdat])',
-  cancer_prevention: '"neoplasms/prevention and control"[MeSH] OR "cancer screening"[Title/Abstract] OR "cancer prevention"[Title/Abstract] AND (2018:2025[pdat])',
-  diabetes: '"diabetes mellitus, type 2/prevention and control"[MeSH] OR "diabetes prevention"[Title/Abstract] OR "A1C"[Title/Abstract] AND (intervention) AND (2018:2025[pdat])',
+  cancer_prevention: '"neoplasms/prevention and control"[MeSH] OR "cancer screening"[Title/Abstract] AND (lifestyle OR intervention) AND (2018:2025[pdat])',
+  diabetes: '"diabetes mellitus, type 2/prevention and control"[MeSH] OR "diabetes prevention"[Title/Abstract] AND intervention AND (2018:2025[pdat])',
   hypertension: '"hypertension/prevention and control"[MeSH] OR "blood pressure"[MeSH] AND (lifestyle OR diet OR exercise) AND (2018:2025[pdat])',
-  mental_health: '"mental health"[MeSH] OR "depression/prevention and control"[MeSH] OR "adverse childhood experiences"[Title/Abstract] AND (longevity OR mortality OR "chronic disease") AND (2018:2025[pdat])',
+  mental_health: '"depression/prevention and control"[MeSH] OR "adverse childhood experiences"[Title/Abstract] AND (longevity OR mortality) AND (2018:2025[pdat])',
 };
 
-// ── SYSTEM PROMPT FOR TRAINING PAIRS ─────────────────────────────────────────
 const TRAINING_SYSTEM = `You are the Sovereign Health LLM, a specialized longevity and early prevention AI trained on peer-reviewed medical literature. You serve rural and Indigenous communities who have historically been excluded from precision preventive medicine. You provide evidence-based, clinically accurate, culturally grounded health guidance focused on early disease detection, longevity optimization, and prevention. You cite specific studies and biomarkers. You connect science to actionable prevention. You understand rural health barriers, Indigenous health factors, social determinants of health, and intergenerational trauma as legitimate clinical variables.`;
-
-// ── PUBMED API FUNCTIONS ──────────────────────────────────────────────────────
-async function searchPubMed(query: string, maxResults: number = 50): Promise<string[]> {
-  const base = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
-  const searchUrl = `${base}/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmax=${maxResults}&retmode=json&sort=relevance`;
-
-  const res = await fetch(searchUrl);
-  const data = await res.json();
-  return data?.esearchresult?.idlist || [];
-}
-
-async function fetchAbstracts(pmids: string[]): Promise<Article[]> {
-  if (!pmids.length) return [];
-  const base = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
-  const ids = pmids.slice(0, 20).join(','); // batch of 20
-  const fetchUrl = `${base}/efetch.fcgi?db=pubmed&id=${ids}&retmode=xml&rettype=abstract`;
-
-  const res = await fetch(fetchUrl);
-  const xml = await res.text();
-
-  return parseArticles(xml);
-}
 
 interface Article {
   pmid: string;
@@ -63,50 +38,48 @@ interface Article {
   doi: string;
 }
 
-function parseArticles(xml: string): Article[] {
-  const articles: Article[] = [];
-
-  // Simple XML parsing without external libraries
-  const articleBlocks = xml.match(/<PubmedArticle>[\s\S]*?<\/PubmedArticle>/g) || [];
-
-  for (const block of articleBlocks) {
-    const pmid = extractTag(block, 'PMID') || '';
-    const title = extractTag(block, 'ArticleTitle') || '';
-    const journal = extractTag(block, 'Title') || extractTag(block, 'ISOAbbreviation') || '';
-    const year = extractTag(block, 'Year') || extractTag(block, 'MedlineDate') || '';
-    const doi = extractDOI(block);
-
-    // Extract abstract text (may have multiple AbstractText sections)
-    const abstractTexts = block.match(/<AbstractText[^>]*>([\s\S]*?)<\/AbstractText>/g) || [];
-    const abstract = abstractTexts
-      .map(t => t.replace(/<[^>]+>/g, ' ').trim())
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    // Extract authors
-    const lastNames = block.match(/<LastName>(.*?)<\/LastName>/g) || [];
-    const authors = lastNames
-      .slice(0, 3)
-      .map(n => n.replace(/<[^>]+>/g, ''))
-      .join(', ') + (lastNames.length > 3 ? ' et al.' : '');
-
-    if (title && abstract && abstract.length > 100) {
-      articles.push({ pmid, title: cleanText(title), abstract: cleanText(abstract), authors, journal: cleanText(journal), year: year.substring(0, 4), doi });
+async function fetchWithRetry(url: string, retries = 3): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'SovereignHealthPipeline/1.0 (matpcul@gmail.com)' },
+        signal: AbortSignal.timeout(25000),
+      });
+      if (res.ok) return res;
+      if (res.status === 429) {
+        await new Promise(r => setTimeout(r, 2000 * (i + 1)));
+        continue;
+      }
+      throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      await new Promise(r => setTimeout(r, 1000 * (i + 1)));
     }
   }
-
-  return articles;
+  throw new Error('Max retries exceeded');
 }
 
-function extractTag(xml: string, tag: string): string {
-  const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));
-  return match ? cleanText(match[1]) : '';
+async function searchPubMed(query: string, maxResults: number): Promise<string[]> {
+  const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmax=${maxResults}&retmode=json&sort=relevance`;
+  try {
+    const res = await fetchWithRetry(url);
+    const data = await res.json();
+    return data?.esearchresult?.idlist || [];
+  } catch {
+    return [];
+  }
 }
 
-function extractDOI(xml: string): string {
-  const match = xml.match(/<ArticleId IdType="doi">(.*?)<\/ArticleId>/);
-  return match ? match[1] : '';
+async function fetchAbstracts(pmids: string[]): Promise<Article[]> {
+  if (!pmids.length) return [];
+  const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${pmids.join(',')}&retmode=xml&rettype=abstract`;
+  try {
+    const res = await fetchWithRetry(url);
+    const xml = await res.text();
+    return parseArticles(xml);
+  } catch {
+    return [];
+  }
 }
 
 function cleanText(text: string): string {
@@ -117,20 +90,58 @@ function cleanText(text: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-// ── BUILD TRAINING PAIRS ──────────────────────────────────────────────────────
-function buildTrainingPairs(articles: Article[], topic: string): object[] {
-  return articles.map(article => {
-    const prompt = buildPrompt(article, topic);
-    const completion = buildCompletion(article, topic);
+function extractTag(xml: string, tag: string): string {
+  const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));
+  return match ? cleanText(match[1]) : '';
+}
 
+function parseArticles(xml: string): Article[] {
+  const articles: Article[] = [];
+  const blocks = xml.match(/<PubmedArticle>[\s\S]*?<\/PubmedArticle>/g) || [];
+  for (const block of blocks) {
+    try {
+      const pmid = extractTag(block, 'PMID');
+      const title = extractTag(block, 'ArticleTitle');
+      const journal = extractTag(block, 'Title') || extractTag(block, 'ISOAbbreviation');
+      const year = (extractTag(block, 'Year') || extractTag(block, 'MedlineDate')).substring(0, 4);
+      const doi = (() => { const m = block.match(/<ArticleId IdType="doi">(.*?)<\/ArticleId>/); return m ? m[1].trim() : ''; })();
+      const abstractTexts = block.match(/<AbstractText[^>]*>[\s\S]*?<\/AbstractText>/g) || [];
+      const abstract = abstractTexts.map(t => t.replace(/<[^>]+>/g, ' ').trim()).join(' ').replace(/\s+/g, ' ').trim();
+      const lastNames = block.match(/<LastName>.*?<\/LastName>/g) || [];
+      const authors = lastNames.slice(0, 3).map(n => n.replace(/<[^>]+>/g, '').trim()).join(', ') + (lastNames.length > 3 ? ' et al.' : '');
+      if (title && abstract && abstract.length > 100) {
+        articles.push({ pmid, title, abstract, authors, journal, year, doi });
+      }
+    } catch { continue; }
+  }
+  return articles;
+}
+
+const PROMPTS = [
+  (t: string, a: Article) => `What does the research say about ${t} based on the study "${a.title}" published in ${a.journal}?`,
+  (t: string, a: Article) => `Explain the key findings from this peer-reviewed study on ${t}: "${a.title}" by ${a.authors}.`,
+  (t: string, a: Article) => `How should a rural community health center apply the findings from "${a.title}" (${a.year}) to improve ${t} outcomes?`,
+  (t: string, a: Article) => `What are the clinical implications for Indigenous and underserved populations from this ${a.year} study on ${t}? Title: "${a.title}"`,
+  (t: string, a: Article) => `As a patient in a rural area trying to optimize my ${t}, what does this research mean for me? Study: "${a.title}" by ${a.authors}.`,
+  (t: string, _a: Article) => `What does current peer-reviewed evidence say about ${t} and how can it be applied in preventive care for underserved communities?`,
+  (t: string, _a: Article) => `How does ${t} affect longevity and long-term health outcomes based on published medical research?`,
+  (t: string, _a: Article) => `What actionable steps can someone in a rural Indigenous community take to address ${t} without specialist access?`,
+];
+
+function buildTrainingPairs(articles: Article[], topic: string): object[] {
+  const label = topic.replace(/_/g, ' ');
+  return articles.map((article, idx) => {
+    const prompt = PROMPTS[idx % PROMPTS.length](label, article);
+    const citation = `${article.authors}${article.authors ? '. ' : ''}"${article.title}." ${article.journal}${article.year ? `, ${article.year}` : ''}${article.doi ? `. DOI: ${article.doi}` : ''}. PMID: ${article.pmid}.`;
+    const completion = `Based on peer-reviewed research, here is what this study tells us about ${label}:\n\n${article.abstract}\n\nCLINICAL IMPLICATIONS FOR PREVENTION:\nThis research is directly relevant to early prevention and longevity optimization. The findings support proactive screening and lifestyle intervention ideally 10 to 20 years before symptoms appear. For rural and Indigenous communities where specialist access is limited, this evidence supports community-based interventions deliverable through primary care, FQHC settings, and tribal health programs.\n\nEVIDENCE SOURCE:\n${citation}\n\nThis analysis is based on published peer-reviewed literature. Always discuss specific medical decisions with a qualified healthcare provider.`;
     return {
-      source: 'pubmed',
-      pmid: article.pmid,
-      doi: article.doi,
+      id: `pubmed-${article.pmid}-${topic}-${idx}`,
+      source: 'pubmed-sovereign-health-pipeline-v2',
       topic,
       timestamp: new Date().toISOString(),
       messages: [
@@ -138,55 +149,21 @@ function buildTrainingPairs(articles: Article[], topic: string): object[] {
         { role: 'user', content: prompt },
         { role: 'assistant', content: completion },
       ],
-      metadata: {
-        title: article.title,
-        authors: article.authors,
-        journal: article.journal,
-        year: article.year,
-        abstractLength: article.abstract.length,
-      },
+      metadata: { pmid: article.pmid, doi: article.doi, title: article.title, authors: article.authors, journal: article.journal, year: article.year },
     };
   });
 }
 
-function buildPrompt(article: Article, topic: string): string {
-  const topicLabel = topic.replace(/_/g, ' ');
-  const prompts = [
-    `What does the research say about ${topicLabel} based on this study: "${article.title}" published in ${article.journal}?`,
-    `Explain the key findings from this peer-reviewed research on ${topicLabel}: "${article.title}"`,
-    `How should I apply this research on ${topicLabel} to my preventive health practice? Study: "${article.title}" by ${article.authors}.`,
-    `What are the clinical implications of this ${article.year} study on ${topicLabel}? "${article.title}"`,
-    `As a patient trying to optimize my ${topicLabel}, what does this research mean for me? Study: "${article.title}"`,
-  ];
-  return prompts[Math.floor(Math.random() * prompts.length)];
-}
-
-function buildCompletion(article: Article, topic: string): string {
-  const citation = `${article.authors}${article.authors ? '. ' : ''}"${article.title}." ${article.journal}${article.year ? `, ${article.year}` : ''}${article.doi ? `. DOI: ${article.doi}` : ''}. PMID: ${article.pmid}.`;
-
-  return `Based on peer-reviewed research, here is what this study tells us about ${topic.replace(/_/g, ' ')}:
-
-${article.abstract}
-
-CLINICAL IMPLICATIONS FOR PREVENTION:
-This research is particularly relevant for early prevention and longevity optimization because it provides evidence-based guidance on ${topic.replace(/_/g, ' ')}. The findings suggest that screening, lifestyle modification, and targeted intervention can meaningfully reduce disease risk when applied proactively — ideally 10 to 20 years before symptoms would otherwise appear.
-
-For rural and Indigenous communities, where access to specialist care is often limited, this research supports the case for community-based preventive interventions that can be delivered through primary care, FQHC settings, and tribal health programs without requiring specialty referral.
-
-EVIDENCE SOURCE:
-${citation}
-
-This analysis is based on published peer-reviewed literature. Always discuss specific medical decisions with a qualified healthcare provider familiar with your complete health history.`;
-}
-
-// ── API HANDLER ───────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { topics, maxPerTopic = 20 } = body;
+    let body: { topics?: unknown; maxPerTopic?: unknown };
+    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
-    if (!topics || !Array.isArray(topics) || topics.length === 0) {
-      return NextResponse.json({ error: 'No topics provided' }, { status: 400 });
+    const topics = body.topics;
+    const maxPerTopic = typeof body.maxPerTopic === 'number' ? Math.min(Math.max(body.maxPerTopic, 5), 100) : 20;
+
+    if (!Array.isArray(topics) || topics.length === 0) {
+      return NextResponse.json({ error: 'topics must be a non-empty array' }, { status: 400 });
     }
 
     const allPairs: object[] = [];
@@ -194,57 +171,62 @@ export async function POST(req: NextRequest) {
     const errors: string[] = [];
 
     for (const topic of topics) {
+      if (typeof topic !== 'string') { errors.push(`Invalid topic: ${JSON.stringify(topic)}`); continue; }
+      const query = TOPIC_QUERIES[topic];
+      if (!query) { errors.push(`Unknown topic: ${topic}`); results[topic] = 0; continue; }
       try {
-        const query = TOPIC_QUERIES[topic];
-        if (!query) { errors.push(`Unknown topic: ${topic}`); continue; }
-
-        // Search PubMed
         const pmids = await searchPubMed(query, maxPerTopic);
         if (!pmids.length) { results[topic] = 0; continue; }
-
-        // Fetch abstracts in batches
-        const batchSize = 20;
         const articles: Article[] = [];
-        for (let i = 0; i < Math.min(pmids.length, maxPerTopic); i += batchSize) {
-          const batch = pmids.slice(i, i + batchSize);
+        for (let i = 0; i < Math.min(pmids.length, maxPerTopic); i += 20) {
+          const batch = pmids.slice(i, i + 20);
           const batchArticles = await fetchAbstracts(batch);
           articles.push(...batchArticles);
-          // Rate limit respect — 3 requests per second max for NCBI
-          await new Promise(r => setTimeout(r, 350));
+          await new Promise(r => setTimeout(r, 400));
         }
-
-        // Build training pairs
         const pairs = buildTrainingPairs(articles, topic);
         allPairs.push(...pairs);
         results[topic] = pairs.length;
-
       } catch (err) {
-        errors.push(`Error on topic ${topic}: ${String(err)}`);
+        errors.push(`Failed ${topic}: ${String(err)}`);
         results[topic] = 0;
       }
     }
 
-    // Return JSONL as download
     const jsonl = allPairs.map(p => JSON.stringify(p)).join('\n');
 
-    return NextResponse.json({
-      success: true,
-      totalPairs: allPairs.length,
-      byTopic: results,
-      errors,
-      jsonl,
-      downloadReady: true,
-    });
+    let masterTotal = allPairs.length;
+    let kvAvailable = false;
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://healthcareiqostrainingpipeline.vercel.app';
+      const storeRes = await fetch(`${baseUrl}/api/store`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonl, runTotal: allPairs.length }),
+      });
+      if (storeRes.ok) {
+        const storeData = await storeRes.json();
+        masterTotal = storeData.masterTotal || masterTotal;
+        kvAvailable = storeData.kvAvailable || false;
+      }
+    } catch { }
+
+    return NextResponse.json({ success: true, totalPairs: allPairs.length, masterTotal, kvAvailable, byTopic: results, errors, jsonl, downloadReady: true });
 
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    console.error('Pipeline error:', err);
+    return NextResponse.json({ error: `Pipeline error: ${String(err)}` }, { status: 500 });
   }
 }
 
 export async function GET() {
   return NextResponse.json({
     status: 'Sovereign Health Pipeline active',
+    runtime: 'nodejs',
+    maxDuration: 300,
     availableTopics: Object.keys(TOPIC_QUERIES),
-    description: 'POST with { topics: string[], maxPerTopic: number } to fetch PubMed data and generate Llama training pairs.',
+    topicCount: Object.keys(TOPIC_QUERIES).length,
+    description: 'POST with { topics: string[], maxPerTopic: number } to fetch PubMed abstracts and generate Llama training pairs.',
+    example: { topics: ['longevity', 'indigenous', 'metabolic'], maxPerTopic: 20 },
   });
 }
