@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'edge';
-export const maxDuration = 60;
+export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 // ── SEARCH TOPICS ─────────────────────────────────────────────────────────────
 // Each topic maps to a precise PubMed search query targeting the best evidence
