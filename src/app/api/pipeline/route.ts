@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { appendPairs } from '@/lib/storage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -198,18 +199,13 @@ export async function POST(req: NextRequest) {
     let masterTotal = allPairs.length;
     let kvAvailable = false;
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://healthcareiqostrainingpipeline.vercel.app';
-      const storeRes = await fetch(`${baseUrl}/api/store`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jsonl, runTotal: allPairs.length }),
-      });
-      if (storeRes.ok) {
-        const storeData = await storeRes.json();
-        masterTotal = storeData.masterTotal || masterTotal;
-        kvAvailable = storeData.kvAvailable || false;
-      }
-    } catch { }
+      const stored = await appendPairs(jsonl, allPairs.length);
+      kvAvailable = stored.kvAvailable;
+      if (stored.kvAvailable) masterTotal = stored.masterTotal;
+      else errors.push('KV not configured: dataset will not persist across runs. Set KV_REST_API_URL and KV_REST_API_TOKEN.');
+    } catch (err) {
+      errors.push(`KV save failed: ${String(err)}`);
+    }
 
     return NextResponse.json({ success: true, totalPairs: allPairs.length, masterTotal, kvAvailable, byTopic: results, errors, jsonl, downloadReady: true });
 
