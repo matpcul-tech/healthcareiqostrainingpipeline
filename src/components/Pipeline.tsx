@@ -45,13 +45,10 @@ export default function Pipeline() {
   const [result, setResult] = useState<RunResult | null>(null);
   const [masterTotal, setMasterTotal] = useState(0);
 
-  // Load master total from KV on page load
   useEffect(() => {
-    fetch('/api/store')
-      .then(res => {
-        const total = res.headers.get('X-Total-Pairs');
-        if (total) setMasterTotal(parseInt(total));
-      })
+    fetch('/api/store?count=true')
+      .then(res => res.json())
+      .then(data => { if (data.total) setMasterTotal(data.total); })
       .catch(() => {});
   }, []);
 
