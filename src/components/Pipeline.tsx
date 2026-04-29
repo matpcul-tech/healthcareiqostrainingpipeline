@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 const T = "'DM Mono',monospace";
 const O = "'Outfit',sans-serif";
@@ -30,6 +30,8 @@ const TOPICS = [
 
 interface RunResult {
   totalPairs: number;
+  masterTotal: number;
+  kvAvailable: boolean;
   byTopic: Record<string, number>;
   errors: string[];
   jsonl: string;
@@ -41,7 +43,17 @@ export default function Pipeline() {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState('');
   const [result, setResult] = useState<RunResult | null>(null);
-  const [totalAllTime, setTotalAllTime] = useState(0);
+  const [masterTotal, setMasterTotal] = useState(0);
+
+  // Load master total from KV on page load
+  useEffect(() => {
+    fetch('/api/store')
+      .then(res => {
+        const total = res.headers.get('X-Total-Pairs');
+        if (total) setMasterTotal(parseInt(total));
+      })
+      .catch(() => {});
+  }, []);
 
   const toggleTopic = useCallback((id: string) => {
     setSelected(prev => {
@@ -65,23 +77,19 @@ export default function Pipeline() {
     if (selected.size === 0) return;
     setRunning(true);
     setResult(null);
-
     const topics = Array.from(selected);
     setProgress(`Connecting to PubMed... searching ${topics.length} topics for up to ${maxPerTopic} articles each...`);
-
     try {
       const res = await fetch('/api/pipeline', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topics, maxPerTopic }),
       });
-
       setProgress('Fetching abstracts and building training pairs...');
       const data = await res.json();
-
       if (data.success) {
         setResult(data);
-        setTotalAllTime(prev => prev + data.totalPairs);
+        setMasterTotal(data.masterTotal || data.totalPairs);
         setProgress('');
       } else {
         setProgress('Error: ' + (data.error || 'Unknown error'));
@@ -89,7 +97,6 @@ export default function Pipeline() {
     } catch (err) {
       setProgress('Network error: ' + String(err));
     }
-
     setRunning(false);
   }, [selected, maxPerTopic]);
 
@@ -121,8 +128,8 @@ export default function Pipeline() {
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: T, fontSize: 18, fontWeight: 700, color: '#4ade80' }}>{totalAllTime.toLocaleString()}</div>
-            <div style={{ fontFamily: T, fontSize: 8, color: '#7a9bbf' }}>pairs generated</div>
+            <div style={{ fontFamily: T, fontSize: 18, fontWeight: 700, color: '#4ade80' }}>{masterTotal.toLocaleString()}</div>
+            <div style={{ fontFamily: T, fontSize: 8, color: '#7a9bbf' }}>total pairs saved</div>
           </div>
         </div>
       </div>
@@ -188,7 +195,6 @@ export default function Pipeline() {
             <span style={{ fontFamily: T, fontSize: 9, color: '#7a9bbf' }}>10 articles</span>
             <span style={{ fontFamily: T, fontSize: 9, color: '#7a9bbf' }}>100 articles</span>
           </div>
-
           <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
             {[
               ['Topics', String(selected.size), '#00d4b8'],
@@ -214,6 +220,12 @@ export default function Pipeline() {
           ) : selected.size === 0 ? 'Select at least one topic' : `Run Pipeline — ${selected.size} topics, est. ${estimatedPairs.toLocaleString()} pairs`}
         </button>
 
+        {/* MASTER EXPORT */}
+        <a href="/api/store" download
+          style={{ display: 'block', width: '100%', padding: '13px', borderRadius: 14, border: '1px solid rgba(212,168,67,.4)', background: 'rgba(212,168,67,.1)', color: '#d4a843', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: O, textAlign: 'center', textDecoration: 'none', marginBottom: 12 }}>
+          Download Master Dataset — All {masterTotal.toLocaleString()} Pairs Ever Generated
+        </a>
+
         {/* PROGRESS */}
         {progress && (
           <div style={{ background: 'rgba(0,212,184,.06)', border: '1px solid rgba(0,212,184,.2)', borderRadius: 12, padding: 14, marginBottom: 14 }}>
@@ -236,8 +248,6 @@ export default function Pipeline() {
                   <div style={{ fontSize: 11, color: '#7a9bbf', marginTop: 3 }}>Ready for Hugging Face fine-tuning</div>
                 </div>
               </div>
-
-              {/* By topic breakdown */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
                 {Object.entries(result.byTopic).map(([topic, count]) => {
                   const topicInfo = TOPICS.find(t => t.id === topic);
@@ -257,21 +267,17 @@ export default function Pipeline() {
                   );
                 })}
               </div>
-
               {result.errors.length > 0 && (
                 <div style={{ background: 'rgba(232,82,110,.06)', border: '1px solid rgba(232,82,110,.2)', borderRadius: 10, padding: 12, marginBottom: 12 }}>
                   <div style={{ fontFamily: T, fontSize: 9, color: '#e8526e', marginBottom: 6 }}>WARNINGS</div>
                   {result.errors.map((e, i) => <div key={i} style={{ fontSize: 10, color: '#7a9bbf', marginBottom: 3 }}>{e}</div>)}
                 </div>
               )}
-
               <button onClick={downloadJSONL}
                 style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg,#4ade80,#22c55e)', color: '#07101f', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: O, boxShadow: '0 0 20px rgba(74,222,128,.3)' }}>
                 Download JSONL Training File
               </button>
             </div>
-
-            {/* Next steps */}
             <div style={{ background: 'rgba(128,96,204,.06)', border: '1px solid rgba(128,96,204,.2)', borderRadius: 14, padding: 16 }}>
               <div style={{ fontFamily: T, fontSize: 9, color: '#8060cc', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10 }}>Next Steps — Upload to Hugging Face</div>
               {[
@@ -310,4 +316,4 @@ export default function Pipeline() {
       </div>
     </div>
   );
-}
+        }
