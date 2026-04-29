@@ -48,7 +48,7 @@ export default function Pipeline() {
   useEffect(() => {
     fetch('/api/store?count=true')
       .then(res => res.json())
-      .then(data => { if (data.total) setMasterTotal(data.total); })
+      .then(data => { if (typeof data.total === 'number') setMasterTotal(data.total); })
       .catch(() => {});
   }, []);
 
@@ -86,7 +86,9 @@ export default function Pipeline() {
       const data = await res.json();
       if (data.success) {
         setResult(data);
-        setMasterTotal(data.masterTotal || data.totalPairs);
+        if (data.kvAvailable && typeof data.masterTotal === 'number') {
+          setMasterTotal(data.masterTotal);
+        }
         setProgress('');
       } else {
         setProgress('Error: ' + (data.error || 'Unknown error'));
