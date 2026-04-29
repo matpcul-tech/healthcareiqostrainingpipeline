@@ -1,36 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Redis } from '@upstash/redis';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const getKV = () => ({
-  url: process.env.KV_REST_API_URL || '',
-  token: process.env.KV_REST_API_TOKEN || '',
-});
+const KEY = 'sovereign-health-master';
 
-async function kvGet(key: string): Promise<string | null> {
-  const { url, token } = getKV();
+function getRedis(): Redis | null {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) return null;
-  try {
-    const res = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.result ?? null;
-  } catch { return null; }
-}
-
-async function kvSet(key: string, value: string): Promise<boolean> {
-  const { url, token } = getKV();
-  if (!url || !token) return false;
-  try {
-    const res = await fetch(`${url}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.ok;
-  } catch { return false; }
+  return new Redis({ url, token });
 }
 
 export async function POST(req: NextRequest) {
@@ -40,32 +20,40 @@ export async function POST(req: NextRequest) {
     if (!jsonl || typeof jsonl !== 'string') {
       return NextResponse.json({ error: 'jsonl required' }, { status: 400 });
     }
-    const { url, token } = getKV();
-    if (!url || !token) {
+    const redis = getRedis();
+    if (!redis) {
       return NextResponse.json({ success: true, masterTotal: runTotal || 0, kvAvailable: false });
     }
-    const existing = await kvGet('sovereign-health-master') || '';
-    const newLines = jsonl.trimEnd();
-    const combined = existing ? existing.trimEnd() + '\n' + newLines : newLines;
-    await kvSet('sovereign-health-master', combined);
-    const total = combined.split('\n').filter(Boolean).length;
-    return NextResponse.json({ success: true, savedPairs: runTotal || 0, masterTotal: total, kvAvailable: true });
+    const chunk = jsonl.endsWith('\n') ? jsonl : jsonl + '\n';
+    await redis.append(KEY, chunk);
+    const master = await redis.get<string>(KEY);
+    const total = master ? master.split('\n').filter(Boolean).length : 0;
+    return NextResponse.json({
+      success: true,
+      savedPairs: runTotal || 0,
+      masterTotal: total,
+      kvAvailable: true,
+    });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const { url, token } = getKV();
-    if (!url || !token) {
-      return NextResponse.json({ error: 'KV not configured' }, { status: 503 });
+    const redis = getRedis();
+    if (!redis) {
+      return NextResponse.json({ error: 'KV not configured', total: 0 }, { status: 503 });
     }
-    const master = await kvGet('sovereign-health-master');
+    const wantCount = new URL(req.url).searchParams.get('count') === 'true';
+    const master = await redis.get<string>(KEY);
+    const total = master ? master.split('\n').filter(Boolean).length : 0;
+    if (wantCount) {
+      return NextResponse.json({ total });
+    }
     if (!master) {
       return NextResponse.json({ error: 'No data yet', total: 0 });
     }
-    const total = master.split('\n').filter(Boolean).length;
     return new NextResponse(master, {
       headers: {
         'Content-Type': 'application/jsonl',
