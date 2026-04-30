@@ -26,6 +26,16 @@ const TOPICS = [
   { id: 'diabetes', label: 'Diabetes Prevention', icon: '💉', color: '#d4a843', desc: 'Type 2 diabetes prevention, A1C, glucose management' },
   { id: 'hypertension', label: 'Blood Pressure', icon: '📊', color: '#e8526e', desc: 'Hypertension prevention, lifestyle interventions, BP control' },
   { id: 'mental_health', label: 'Mental Health', icon: '💙', color: '#8060cc', desc: 'Depression, ACEs, trauma, mental health and longevity' },
+  { id: 'precision_medicine', label: 'Precision Medicine', icon: '🎯', color: '#00d4b8', desc: 'Personalized medicine, genomics, individualized prevention' },
+  { id: 'gut_health', label: 'Gut Health', icon: '🌱', color: '#4ade80', desc: 'Intestinal permeability, gut barrier, digestive wellness' },
+  { id: 'autoimmune', label: 'Autoimmune Disease', icon: '🦋', color: '#e8526e', desc: 'Rheumatoid arthritis, lupus, Hashimotos, MS, autoimmunity' },
+  { id: 'chronic_pain', label: 'Chronic Pain', icon: '🩹', color: '#d4a843', desc: 'Pain management, fibromyalgia, non-pharmacologic interventions' },
+  { id: 'native_diabetes', label: 'Native American Diabetes', icon: '🪶', color: '#d4a843', desc: 'Indigenous diabetes prevention, tribal community interventions' },
+  { id: 'tribal_mental_health', label: 'Tribal Mental Health', icon: '🌿', color: '#8060cc', desc: 'Historical trauma, Indigenous wellness, suicide prevention' },
+  { id: 'food_sovereignty', label: 'Food Sovereignty', icon: '🌽', color: '#4ade80', desc: 'Traditional foods, Indigenous nutrition, food security' },
+  { id: 'environmental_health', label: 'Environmental Health', icon: '🌍', color: '#00b89e', desc: 'Toxins, pollutants, endocrine disruptors, heavy metals' },
+  { id: 'epigenetics_lifestyle', label: 'Epigenetics and Lifestyle', icon: '🧬', color: '#8060cc', desc: 'DNA methylation, lifestyle factors, gene expression' },
+  { id: 'immune_optimization', label: 'Immune Optimization', icon: '⚔️', color: '#00d4b8', desc: 'Immune system, immunosenescence, innate immunity' },
 ];
 
 interface HFStatus {
