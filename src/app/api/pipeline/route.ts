@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { appendPairs } from '@/lib/storage';
+import { appendTopicPairs } from '@/lib/storage';
+import { pushTopicToHuggingFace, HF_DATASET_REPO, HFPushResult } from '@/lib/huggingface';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -16,7 +17,7 @@ const TOPIC_QUERIES: Record<string, string> = {
   indigenous: '"american indian or alaska native"[MeSH] OR "indigenous health"[Title/Abstract] OR "tribal health"[Title/Abstract] AND "preventive health services"[MeSH] AND (2015:2025[pdat])',
   rural: '"rural health"[MeSH] OR "medically underserved area"[MeSH] OR "health disparities"[MeSH] AND (prevention OR screening) AND (2018:2025[pdat])',
   inflammation: '"C-reactive protein"[MeSH] OR "chronic inflammation"[Title/Abstract] OR inflammaging[Title/Abstract] AND (aging OR longevity) AND (2018:2025[pdat])',
-  biomarkers: '"biological markers"[MeSH] AND (longevity OR "healthy aging" OR "biological age") AND (2018:2025[pdat])',
+  biomarkers: '(biomarker[Title/Abstract] OR biomarkers[Title/Abstract] OR "biological markers"[MeSH] OR "biological age"[Title/Abstract] OR "epigenetic clock"[Title/Abstract] OR "GrimAge"[Title/Abstract] OR "DunedinPACE"[Title/Abstract] OR "PhenoAge"[Title/Abstract]) AND (aging OR longevity OR "healthy aging" OR mortality OR "biological age" OR "disease prediction") AND (2015:2025[pdat])',
   hormones: 'testosterone[MeSH] OR DHEA[MeSH] OR "growth hormone"[MeSH] AND (aging OR longevity) AND (2018:2025[pdat])',
   microbiome: '"gastrointestinal microbiome"[MeSH] OR "gut microbiota"[Title/Abstract] AND (longevity OR aging OR "chronic disease") AND (2018:2025[pdat])',
   telomere: 'telomere[MeSH] OR "telomere length"[Title/Abstract] AND (aging OR longevity OR "biological age") AND (2015:2025[pdat])',
@@ -170,14 +171,30 @@ export async function POST(req: NextRequest) {
     const allPairs: object[] = [];
     const results: Record<string, number> = {};
     const errors: string[] = [];
+    const topicKeys: Record<string, string> = {};
+    const huggingFace: Record<string, HFPushResult> = {};
+
+    let masterTotal = 0;
+    let kvAvailable = false;
+    let kvWarned = false;
 
     for (const topic of topics) {
-      if (typeof topic !== 'string') { errors.push(`Invalid topic: ${JSON.stringify(topic)}`); continue; }
+      if (typeof topic !== 'string') {
+        errors.push(`Invalid topic: ${JSON.stringify(topic)}`);
+        continue;
+      }
       const query = TOPIC_QUERIES[topic];
-      if (!query) { errors.push(`Unknown topic: ${topic}`); results[topic] = 0; continue; }
+      if (!query) {
+        errors.push(`Unknown topic: ${topic}`);
+        results[topic] = 0;
+        continue;
+      }
       try {
         const pmids = await searchPubMed(query, maxPerTopic);
-        if (!pmids.length) { results[topic] = 0; continue; }
+        if (!pmids.length) {
+          results[topic] = 0;
+          continue;
+        }
         const articles: Article[] = [];
         for (let i = 0; i < Math.min(pmids.length, maxPerTopic); i += 20) {
           const batch = pmids.slice(i, i + 20);
@@ -186,28 +203,62 @@ export async function POST(req: NextRequest) {
           await new Promise(r => setTimeout(r, 400));
         }
         const pairs = buildTrainingPairs(articles, topic);
-        allPairs.push(...pairs);
         results[topic] = pairs.length;
+        allPairs.push(...pairs);
+
+        if (pairs.length === 0) continue;
+
+        const topicJsonl = pairs.map(p => JSON.stringify(p)).join('\n');
+
+        try {
+          const stored = await appendTopicPairs(topic, topicJsonl, pairs.length);
+          kvAvailable = stored.kvAvailable;
+          if (stored.kvAvailable) {
+            masterTotal = stored.masterTotal;
+            topicKeys[topic] = stored.topicKey;
+          } else if (!kvWarned) {
+            errors.push(
+              'KV not configured: dataset will not persist across runs. Set KV_REST_API_URL and KV_REST_API_TOKEN.',
+            );
+            kvWarned = true;
+          }
+        } catch (err) {
+          errors.push(`KV save failed for ${topic}: ${String(err)}`);
+        }
+
+        try {
+          const hf = await pushTopicToHuggingFace(topic, topicJsonl, pairs.length);
+          huggingFace[topic] = hf;
+          if (!hf.pushed && hf.reason) {
+            errors.push(`HF push skipped for ${topic}: ${hf.reason}`);
+          }
+        } catch (err) {
+          const reason = String(err);
+          huggingFace[topic] = { pushed: false, reason, repo: HF_DATASET_REPO };
+          errors.push(`HF push failed for ${topic}: ${reason}`);
+        }
       } catch (err) {
         errors.push(`Failed ${topic}: ${String(err)}`);
-        results[topic] = 0;
+        results[topic] = results[topic] ?? 0;
       }
     }
 
     const jsonl = allPairs.map(p => JSON.stringify(p)).join('\n');
+    if (!masterTotal) masterTotal = allPairs.length;
 
-    let masterTotal = allPairs.length;
-    let kvAvailable = false;
-    try {
-      const stored = await appendPairs(jsonl, allPairs.length);
-      kvAvailable = stored.kvAvailable;
-      if (stored.kvAvailable) masterTotal = stored.masterTotal;
-      else errors.push('KV not configured: dataset will not persist across runs. Set KV_REST_API_URL and KV_REST_API_TOKEN.');
-    } catch (err) {
-      errors.push(`KV save failed: ${String(err)}`);
-    }
-
-    return NextResponse.json({ success: true, totalPairs: allPairs.length, masterTotal, kvAvailable, byTopic: results, errors, jsonl, downloadReady: true });
+    return NextResponse.json({
+      success: true,
+      totalPairs: allPairs.length,
+      masterTotal,
+      kvAvailable,
+      byTopic: results,
+      topicKeys,
+      huggingFace,
+      huggingFaceRepo: HF_DATASET_REPO,
+      errors,
+      jsonl,
+      downloadReady: true,
+    });
 
   } catch (err) {
     console.error('Pipeline error:', err);
@@ -222,6 +273,8 @@ export async function GET() {
     maxDuration: 300,
     availableTopics: Object.keys(TOPIC_QUERIES),
     topicCount: Object.keys(TOPIC_QUERIES).length,
+    huggingFaceRepo: HF_DATASET_REPO,
+    storage: 'Per-topic Upstash keys with topic: prefix; auto-pushed to Hugging Face after each topic.',
     description: 'POST with { topics: string[], maxPerTopic: number } to fetch PubMed abstracts and generate Llama training pairs.',
     example: { topics: ['longevity', 'indigenous', 'metabolic'], maxPerTopic: 20 },
   });
