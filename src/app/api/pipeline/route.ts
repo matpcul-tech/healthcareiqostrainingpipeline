@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { appendTopicPairs, getProcessedIds, addProcessedIds } from '@/lib/storage';
+import { getProcessedIds, addProcessedIds } from '@/lib/storage';
 import { pushTopicToHuggingFace, HF_DATASET_REPO, HFPushResult } from '@/lib/huggingface';
 
 export const runtime = 'nodejs';
@@ -178,13 +178,8 @@ export async function POST(req: NextRequest) {
     const allPairs: object[] = [];
     const results: Record<string, number> = {};
     const errors: string[] = [];
-    const topicKeys: Record<string, string> = {};
     const huggingFace: Record<string, HFPushResult> = {};
     const dedupe: Record<string, DedupeStats> = {};
-
-    let masterTotal = 0;
-    let kvAvailable = false;
-    let kvWarned = false;
 
     for (const topic of topics) {
       if (typeof topic !== 'string') {
@@ -214,7 +209,7 @@ export async function POST(req: NextRequest) {
         let newPmids = pmids;
         try {
           const processed = await getProcessedIds(topic);
-          if (processed.kvAvailable && processed.ids.size > 0) {
+          if (processed.ids.size > 0) {
             newPmids = pmids.filter(id => !processed.ids.has(String(id)));
             stats.alreadyProcessed = pmids.length - newPmids.length;
             stats.newCandidates = newPmids.length;
@@ -248,22 +243,6 @@ export async function POST(req: NextRequest) {
         const topicJsonl = pairs.map(p => JSON.stringify(p)).join('\n');
 
         try {
-          const stored = await appendTopicPairs(topic, topicJsonl, pairs.length);
-          kvAvailable = stored.kvAvailable;
-          if (stored.kvAvailable) {
-            masterTotal = stored.masterTotal;
-            topicKeys[topic] = stored.topicKey;
-          } else if (!kvWarned) {
-            errors.push(
-              'KV not configured: dataset will not persist across runs. Set KV_REST_API_URL and KV_REST_API_TOKEN.',
-            );
-            kvWarned = true;
-          }
-        } catch (err) {
-          errors.push(`KV save failed for ${topic}: ${String(err)}`);
-        }
-
-        try {
           const processedIds = articles.map(a => a.pmid).filter(Boolean);
           if (processedIds.length > 0) {
             const marked = await addProcessedIds(topic, processedIds);
@@ -293,15 +272,11 @@ export async function POST(req: NextRequest) {
     }
 
     const jsonl = allPairs.map(p => JSON.stringify(p)).join('\n');
-    if (!masterTotal) masterTotal = allPairs.length;
 
     return NextResponse.json({
       success: true,
       totalPairs: allPairs.length,
-      masterTotal,
-      kvAvailable,
       byTopic: results,
-      topicKeys,
       huggingFace,
       huggingFaceRepo: HF_DATASET_REPO,
       dedupe,
@@ -324,7 +299,7 @@ export async function GET() {
     availableTopics: Object.keys(TOPIC_QUERIES),
     topicCount: Object.keys(TOPIC_QUERIES).length,
     huggingFaceRepo: HF_DATASET_REPO,
-    storage: 'Per-topic Upstash keys with topic: prefix; processed-ids:<topic> sets dedupe across runs; auto-pushed to Hugging Face after each topic.',
+    storage: 'In-memory dedupe via processed-ids during a run; Hugging Face dataset push after each topic is the only persistent storage.',
     description: 'POST with { topics: string[], maxPerTopic: number } to fetch PubMed abstracts and generate Llama training pairs.',
     example: { topics: ['longevity', 'indigenous', 'metabolic'], maxPerTopic: 20 },
   });
