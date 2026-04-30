@@ -28,11 +28,22 @@ const TOPICS = [
   { id: 'mental_health', label: 'Mental Health', icon: '💙', color: '#8060cc', desc: 'Depression, ACEs, trauma, mental health and longevity' },
 ];
 
+interface HFStatus {
+  pushed: boolean;
+  reason?: string;
+  path?: string;
+  commitUrl?: string;
+  repo?: string;
+}
+
 interface RunResult {
   totalPairs: number;
   masterTotal: number;
   kvAvailable: boolean;
   byTopic: Record<string, number>;
+  topicKeys?: Record<string, string>;
+  huggingFace?: Record<string, HFStatus>;
+  huggingFaceRepo?: string;
   errors: string[];
   jsonl: string;
 }
@@ -277,14 +288,44 @@ export default function Pipeline() {
                 Download JSONL Training File
               </button>
             </div>
+            {result.huggingFace && Object.keys(result.huggingFace).length > 0 && (
+              <div style={{ background: 'rgba(128,96,204,.06)', border: '1px solid rgba(128,96,204,.2)', borderRadius: 14, padding: 16, marginBottom: 14 }}>
+                <div style={{ fontFamily: T, fontSize: 9, color: '#8060cc', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10 }}>Hugging Face Auto-Push</div>
+                <div style={{ fontSize: 11, color: '#7a9bbf', marginBottom: 10, lineHeight: 1.6 }}>
+                  Each topic was pushed as its own JSONL file to <span style={{ color: '#8060cc', fontFamily: T }}>{result.huggingFaceRepo || 'SovereignShieldTechnologiesLLC/sovereign-health-training-data'}</span>.
+                </div>
+                {Object.entries(result.huggingFace).map(([topic, hf]) => {
+                  const topicInfo = TOPICS.find(t => t.id === topic);
+                  return (
+                    <div key={topic} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                      <span style={{ fontSize: 12 }}>{topicInfo?.icon || '📄'}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                          <span style={{ fontSize: 10, color: '#eef2f8' }}>{topicInfo?.label || topic}</span>
+                          <span style={{ fontFamily: T, fontSize: 9, color: hf.pushed ? '#4ade80' : '#e8526e' }}>
+                            {hf.pushed ? 'PUSHED' : 'SKIPPED'}
+                          </span>
+                        </div>
+                        <div style={{ fontFamily: T, fontSize: 9, color: '#7a9bbf', marginTop: 2, wordBreak: 'break-all' }}>
+                          {hf.path || hf.reason || ''}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{ marginTop: 10, fontFamily: T, fontSize: 9, color: '#8060cc' }}>
+                  Set HF_TOKEN in the deployment environment to enable auto-push. Run more topics anytime to keep appending pairs.
+                </div>
+              </div>
+            )}
             <div style={{ background: 'rgba(128,96,204,.06)', border: '1px solid rgba(128,96,204,.2)', borderRadius: 14, padding: 16 }}>
-              <div style={{ fontFamily: T, fontSize: 9, color: '#8060cc', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10 }}>Next Steps — Upload to Hugging Face</div>
+              <div style={{ fontFamily: T, fontSize: 9, color: '#8060cc', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 10 }}>Next Steps — Hugging Face</div>
               {[
-                { step: '1', text: 'Download the JSONL file above' },
-                { step: '2', text: 'Go to huggingface.co and open your SovereignShieldTechnologiesLLC organization' },
-                { step: '3', text: 'Create a new dataset repository called sovereign-health-training-data' },
-                { step: '4', text: 'Upload the JSONL file to the dataset repository' },
-                { step: '5', text: 'Point your fine-tuning job at the dataset. Run more pipeline batches to keep adding data.' },
+                { step: '1', text: 'New pairs are auto-pushed to SovereignShieldTechnologiesLLC/sovereign-health-training-data after each topic.' },
+                { step: '2', text: 'Each topic is saved as its own file: data/topic-{name}-{timestamp}.jsonl' },
+                { step: '3', text: 'Per-topic Upstash keys (topic:diabetes-prevention, topic:cancer-prevention, etc.) keep individual values under 100MB.' },
+                { step: '4', text: 'Use the master download above to merge every topic into a single JSONL file for offline review.' },
+                { step: '5', text: 'Point your fine-tuning job at the Hugging Face dataset and run more pipeline batches to keep growing it.' },
               ].map(s => (
                 <div key={s.step} style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                   <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#8060cc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T, fontSize: 10, fontWeight: 700, color: '#eef2f8', flexShrink: 0 }}>{s.step}</div>
