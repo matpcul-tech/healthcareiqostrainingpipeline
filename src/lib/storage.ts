@@ -1,6 +1,7 @@
 import { Redis } from '@upstash/redis';
 
 const TOPIC_PREFIX = 'topic:';
+const PROCESSED_PREFIX = 'processed-ids:';
 const COUNTS_HASH = 'sovereign-counts';
 const LEGACY_KEY = 'sovereign-health-master';
 const LEGACY_COUNT_KEY = 'sovereign-health-master-count';
@@ -25,6 +26,10 @@ export function normalizeTopic(topic: string): string {
 
 export function topicKey(topic: string): string {
   return TOPIC_PREFIX + normalizeTopic(topic);
+}
+
+export function processedIdsKey(topic: string): string {
+  return PROCESSED_PREFIX + normalizeTopic(topic);
 }
 
 interface Totals {
@@ -150,4 +155,36 @@ export async function getMaster(): Promise<{
     byTopic: totals.byTopic,
     topicCount: keys.length,
   };
+}
+
+export async function getProcessedIds(
+  topic: string,
+): Promise<{ kvAvailable: boolean; ids: Set<string>; key: string }> {
+  const redis = getRedis();
+  const key = processedIdsKey(topic);
+  if (!redis) return { kvAvailable: false, ids: new Set(), key };
+  try {
+    const members = (await redis.smembers(key)) as unknown as string[] | null;
+    const ids = new Set<string>();
+    if (Array.isArray(members)) {
+      for (const m of members) if (m) ids.add(String(m));
+    }
+    return { kvAvailable: true, ids, key };
+  } catch {
+    return { kvAvailable: true, ids: new Set(), key };
+  }
+}
+
+export async function addProcessedIds(
+  topic: string,
+  ids: string[],
+): Promise<{ kvAvailable: boolean; added: number; key: string }> {
+  const redis = getRedis();
+  const key = processedIdsKey(topic);
+  if (!redis) return { kvAvailable: false, added: 0, key };
+  const clean = Array.from(new Set(ids.map(id => String(id).trim()).filter(Boolean)));
+  if (clean.length === 0) return { kvAvailable: true, added: 0, key };
+  const [first, ...rest] = clean;
+  const added = await redis.sadd(key, first, ...rest);
+  return { kvAvailable: true, added: Number(added) || 0, key };
 }

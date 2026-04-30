@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { appendTopicPairs } from '@/lib/storage';
+import { appendTopicPairs, getProcessedIds, addProcessedIds } from '@/lib/storage';
 import { pushTopicToHuggingFace, HF_DATASET_REPO, HFPushResult } from '@/lib/huggingface';
 
 export const runtime = 'nodejs';
@@ -156,6 +156,13 @@ function buildTrainingPairs(articles: Article[], topic: string): object[] {
   });
 }
 
+interface DedupeStats {
+  fetched: number;
+  alreadyProcessed: number;
+  newCandidates: number;
+  newlyMarked: number;
+}
+
 export async function POST(req: NextRequest) {
   try {
     let body: { topics?: unknown; maxPerTopic?: unknown };
@@ -173,6 +180,7 @@ export async function POST(req: NextRequest) {
     const errors: string[] = [];
     const topicKeys: Record<string, string> = {};
     const huggingFace: Record<string, HFPushResult> = {};
+    const dedupe: Record<string, DedupeStats> = {};
 
     let masterTotal = 0;
     let kvAvailable = false;
@@ -191,13 +199,39 @@ export async function POST(req: NextRequest) {
       }
       try {
         const pmids = await searchPubMed(query, maxPerTopic);
+        const stats: DedupeStats = {
+          fetched: pmids.length,
+          alreadyProcessed: 0,
+          newCandidates: pmids.length,
+          newlyMarked: 0,
+        };
         if (!pmids.length) {
           results[topic] = 0;
+          dedupe[topic] = stats;
           continue;
         }
+
+        let newPmids = pmids;
+        try {
+          const processed = await getProcessedIds(topic);
+          if (processed.kvAvailable && processed.ids.size > 0) {
+            newPmids = pmids.filter(id => !processed.ids.has(String(id)));
+            stats.alreadyProcessed = pmids.length - newPmids.length;
+            stats.newCandidates = newPmids.length;
+          }
+        } catch (err) {
+          errors.push(`Dedupe lookup failed for ${topic}: ${String(err)}`);
+        }
+
+        if (newPmids.length === 0) {
+          results[topic] = 0;
+          dedupe[topic] = stats;
+          continue;
+        }
+
         const articles: Article[] = [];
-        for (let i = 0; i < Math.min(pmids.length, maxPerTopic); i += 20) {
-          const batch = pmids.slice(i, i + 20);
+        for (let i = 0; i < Math.min(newPmids.length, maxPerTopic); i += 20) {
+          const batch = newPmids.slice(i, i + 20);
           const batchArticles = await fetchAbstracts(batch);
           articles.push(...batchArticles);
           await new Promise(r => setTimeout(r, 400));
@@ -206,7 +240,10 @@ export async function POST(req: NextRequest) {
         results[topic] = pairs.length;
         allPairs.push(...pairs);
 
-        if (pairs.length === 0) continue;
+        if (pairs.length === 0) {
+          dedupe[topic] = stats;
+          continue;
+        }
 
         const topicJsonl = pairs.map(p => JSON.stringify(p)).join('\n');
 
@@ -227,6 +264,16 @@ export async function POST(req: NextRequest) {
         }
 
         try {
+          const processedIds = articles.map(a => a.pmid).filter(Boolean);
+          if (processedIds.length > 0) {
+            const marked = await addProcessedIds(topic, processedIds);
+            stats.newlyMarked = marked.added;
+          }
+        } catch (err) {
+          errors.push(`Dedupe write failed for ${topic}: ${String(err)}`);
+        }
+
+        try {
           const hf = await pushTopicToHuggingFace(topic, topicJsonl, pairs.length);
           huggingFace[topic] = hf;
           if (!hf.pushed && hf.reason) {
@@ -237,6 +284,8 @@ export async function POST(req: NextRequest) {
           huggingFace[topic] = { pushed: false, reason, repo: HF_DATASET_REPO };
           errors.push(`HF push failed for ${topic}: ${reason}`);
         }
+
+        dedupe[topic] = stats;
       } catch (err) {
         errors.push(`Failed ${topic}: ${String(err)}`);
         results[topic] = results[topic] ?? 0;
@@ -255,6 +304,7 @@ export async function POST(req: NextRequest) {
       topicKeys,
       huggingFace,
       huggingFaceRepo: HF_DATASET_REPO,
+      dedupe,
       errors,
       jsonl,
       downloadReady: true,
@@ -274,7 +324,7 @@ export async function GET() {
     availableTopics: Object.keys(TOPIC_QUERIES),
     topicCount: Object.keys(TOPIC_QUERIES).length,
     huggingFaceRepo: HF_DATASET_REPO,
-    storage: 'Per-topic Upstash keys with topic: prefix; auto-pushed to Hugging Face after each topic.',
+    storage: 'Per-topic Upstash keys with topic: prefix; processed-ids:<topic> sets dedupe across runs; auto-pushed to Hugging Face after each topic.',
     description: 'POST with { topics: string[], maxPerTopic: number } to fetch PubMed abstracts and generate Llama training pairs.',
     example: { topics: ['longevity', 'indigenous', 'metabolic'], maxPerTopic: 20 },
   });
