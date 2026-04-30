@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 
 const T = "'DM Mono',monospace";
 const O = "'Outfit',sans-serif";
@@ -38,10 +38,7 @@ interface HFStatus {
 
 interface RunResult {
   totalPairs: number;
-  masterTotal: number;
-  kvAvailable: boolean;
   byTopic: Record<string, number>;
-  topicKeys?: Record<string, string>;
   huggingFace?: Record<string, HFStatus>;
   huggingFaceRepo?: string;
   errors: string[];
@@ -54,14 +51,8 @@ export default function Pipeline() {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState('');
   const [result, setResult] = useState<RunResult | null>(null);
-  const [masterTotal, setMasterTotal] = useState(0);
-
-  useEffect(() => {
-    fetch('/api/store?count=true')
-      .then(res => res.json())
-      .then(data => { if (typeof data.total === 'number') setMasterTotal(data.total); })
-      .catch(() => {});
-  }, []);
+  const [sessionTotal, setSessionTotal] = useState(0);
+  const [sessionJsonl, setSessionJsonl] = useState('');
 
   const toggleTopic = useCallback((id: string) => {
     setSelected(prev => {
@@ -97,8 +88,13 @@ export default function Pipeline() {
       const data = await res.json();
       if (data.success) {
         setResult(data);
-        if (data.kvAvailable && typeof data.masterTotal === 'number') {
-          setMasterTotal(data.masterTotal);
+        if (typeof data.totalPairs === 'number' && data.totalPairs > 0) {
+          setSessionTotal(prev => prev + data.totalPairs);
+          setSessionJsonl(prev => {
+            const next = typeof data.jsonl === 'string' && data.jsonl ? data.jsonl : '';
+            if (!next) return prev;
+            return prev ? prev + '\n' + next : next;
+          });
         }
         setProgress('');
       } else {
@@ -121,7 +117,20 @@ export default function Pipeline() {
     URL.revokeObjectURL(url);
   }, [result]);
 
+  const downloadMasterJSONL = useCallback(() => {
+    const merged = sessionJsonl || result?.jsonl || '';
+    if (!merged) return;
+    const blob = new Blob([merged], { type: 'application/jsonl' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sovereign-health-master-${Date.now()}.jsonl`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [sessionJsonl, result]);
+
   const estimatedPairs = Array.from(selected).length * maxPerTopic;
+  const masterAvailable = Boolean(sessionJsonl || result?.jsonl);
 
   return (
     <div style={{ minHeight: '100vh', background: '#07101f', fontFamily: O, color: '#eef2f8', paddingBottom: 80 }}>
@@ -138,8 +147,8 @@ export default function Pipeline() {
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: T, fontSize: 18, fontWeight: 700, color: '#4ade80' }}>{masterTotal.toLocaleString()}</div>
-            <div style={{ fontFamily: T, fontSize: 8, color: '#7a9bbf' }}>total pairs saved</div>
+            <div style={{ fontFamily: T, fontSize: 18, fontWeight: 700, color: '#4ade80' }}>{sessionTotal.toLocaleString()}</div>
+            <div style={{ fontFamily: T, fontSize: 8, color: '#7a9bbf' }}>pairs this session</div>
           </div>
         </div>
       </div>
@@ -231,10 +240,10 @@ export default function Pipeline() {
         </button>
 
         {/* MASTER EXPORT */}
-        <a href="/api/store" download
-          style={{ display: 'block', width: '100%', padding: '13px', borderRadius: 14, border: '1px solid rgba(212,168,67,.4)', background: 'rgba(212,168,67,.1)', color: '#d4a843', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: O, textAlign: 'center', textDecoration: 'none', marginBottom: 12 }}>
-          Download Master Dataset — All {masterTotal.toLocaleString()} Pairs Ever Generated
-        </a>
+        <button onClick={downloadMasterJSONL} disabled={!masterAvailable}
+          style={{ display: 'block', width: '100%', padding: '13px', borderRadius: 14, border: '1px solid rgba(212,168,67,.4)', background: masterAvailable ? 'rgba(212,168,67,.1)' : 'rgba(212,168,67,.04)', color: masterAvailable ? '#d4a843' : '#7a9bbf', fontWeight: 700, fontSize: 14, cursor: masterAvailable ? 'pointer' : 'not-allowed', fontFamily: O, textAlign: 'center', textDecoration: 'none', marginBottom: 12 }}>
+          Download Master Dataset — All {sessionTotal.toLocaleString()} Pairs From This Session
+        </button>
 
         {/* PROGRESS */}
         {progress && (
@@ -323,8 +332,8 @@ export default function Pipeline() {
               {[
                 { step: '1', text: 'New pairs are auto-pushed to SovereignShieldTechnologiesLLC/sovereign-health-training-data after each topic.' },
                 { step: '2', text: 'Each topic is saved as its own file: data/topic-{name}-{timestamp}.jsonl' },
-                { step: '3', text: 'Per-topic Upstash keys (topic:diabetes-prevention, topic:cancer-prevention, etc.) keep individual values under 100MB.' },
-                { step: '4', text: 'Use the master download above to merge every topic into a single JSONL file for offline review.' },
+                { step: '3', text: 'In-memory dedupe via processed-ids prevents repeating PMIDs within a run; the Hugging Face dataset is the only persistent store.' },
+                { step: '4', text: 'Use the master download above to merge every topic from this session into a single JSONL file for offline review.' },
                 { step: '5', text: 'Point your fine-tuning job at the Hugging Face dataset and run more pipeline batches to keep growing it.' },
               ].map(s => (
                 <div key={s.step} style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
