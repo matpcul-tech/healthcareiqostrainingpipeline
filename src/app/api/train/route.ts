@@ -14,10 +14,10 @@ const DEFAULTS = {
   spaceName: 'sovereign-health-trainer',
   hardware: 'l4x1',
   epochs: 3,
-  batchSize: 8,
-  gradientAccumulation: 2,
+  batchSize: 4,
+  gradientAccumulation: 4,
   learningRate: 2e-4,
-  maxSeqLen: 2048,
+  maxSeqLen: 512,
   loraR: 16,
   loraAlpha: 32,
 };
