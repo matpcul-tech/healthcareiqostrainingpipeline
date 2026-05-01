@@ -58,17 +58,22 @@ def main() -> None:
     print(f"[train] dataset={DATASET_REPO} split={TRAIN_SPLIT}")
     print(f"[train] output_repo={output_repo}")
 
+    data_glob = f"hf://datasets/{DATASET_REPO}/data/*.jsonl"
+    print(f"[train] data_files={data_glob}")
     dataset = load_dataset(
-        DATASET_REPO,
+        "json",
+        data_files={TRAIN_SPLIT: data_glob},
         split=TRAIN_SPLIT,
         token=HF_TOKEN,
-        trust_remote_code=True,
         features=None,
     )
     print(f"[train] dataset rows: {len(dataset)}")
     print(f"[train] dataset columns: {dataset.column_names}")
-    keep_cols = [c for c in dataset.column_names if c == "messages"]
-    drop_cols = [c for c in dataset.column_names if c not in keep_cols]
+    if "messages" not in dataset.column_names:
+        raise RuntimeError(
+            f"Dataset missing required 'messages' column. Got: {dataset.column_names}"
+        )
+    drop_cols = [c for c in dataset.column_names if c != "messages"]
     if drop_cols:
         dataset = dataset.remove_columns(drop_cols)
         print(f"[train] dropped columns: {drop_cols}")
