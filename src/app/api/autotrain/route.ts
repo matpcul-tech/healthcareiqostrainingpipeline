@@ -4,7 +4,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const PROJECT_NAME = 'sovereign-health-v1';
-const BASE_MODEL = 'meta-llama/Meta-Llama-3.1-8B';
+const BASE_MODEL = 'meta-llama/Llama-3.2-3B';
 const DATASET = 'SovereignShieldTechnologiesLLC/sovereign-health-training-data';
 const TRAIN_SPLIT = 'train';
 const HARDWARE = 'spaces-l4x1';
