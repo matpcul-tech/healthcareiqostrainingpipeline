@@ -109,7 +109,7 @@ def main() -> None:
         optim="adamw_torch",
         lr_scheduler_type="linear",
         warmup_ratio=0.03,
-        max_seq_length=MAX_SEQ_LEN,
+        max_length=MAX_SEQ_LEN,
         packing=False,
         logging_steps=10,
         save_strategy="epoch",
@@ -126,7 +126,7 @@ def main() -> None:
         args=sft_config,
         train_dataset=dataset,
         peft_config=peft_config,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
     )
 
     trainer.train()
