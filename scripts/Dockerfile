@@ -17,4 +17,6 @@ RUN pip install --upgrade pip && pip install -r /app/requirements.txt
 
 COPY train.py /app/train.py
 
-CMD ["python", "/app/train.py"]
+EXPOSE 7860
+
+CMD ["uvicorn", "train:app", "--app-dir", "/app", "--host", "0.0.0.0", "--port", "7860"]

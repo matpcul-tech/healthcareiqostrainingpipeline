@@ -235,6 +235,7 @@ function readmeFor(namespace: string, repoName: string, hardware: string): strin
     'colorTo: green',
     'sdk: docker',
     'pinned: false',
+    'app_port: 7860',
     `hardware: ${hardware}`,
     '---',
     '',
