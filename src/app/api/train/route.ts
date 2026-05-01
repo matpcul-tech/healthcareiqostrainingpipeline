@@ -12,7 +12,7 @@ const DEFAULTS = {
   dataset: 'SovereignShieldTechnologiesLLC/sovereign-health-training-data',
   trainSplit: 'train',
   spaceName: 'sovereign-health-trainer',
-  hardware: 'l4x1',
+  hardware: 'a100-large',
   epochs: 3,
   batchSize: 4,
   gradientAccumulation: 4,
