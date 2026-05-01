@@ -17,7 +17,7 @@ import torch
 from datasets import load_dataset
 from huggingface_hub import login, whoami
 from peft import LoraConfig
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import SFTConfig, SFTTrainer
 
 
@@ -78,13 +78,6 @@ def main() -> None:
         dataset = dataset.remove_columns(drop_cols)
         print(f"[train] dropped columns: {drop_cols}")
 
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
-        bnb_4bit_use_double_quant=True,
-    )
-
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, token=HF_TOKEN)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -92,10 +85,9 @@ def main() -> None:
 
     model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL,
-        quantization_config=bnb_config,
         device_map="auto",
         token=HF_TOKEN,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
     )
 
     peft_config = LoraConfig(
