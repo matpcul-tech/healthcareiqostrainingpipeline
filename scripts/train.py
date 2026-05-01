@@ -126,13 +126,14 @@ def main() -> None:
         max_length=MAX_SEQ_LEN,
         packing=False,
         logging_steps=10,
-        save_strategy="epoch",
-        save_total_limit=1,
+        save_strategy="steps",
+        save_steps=100,
+        save_total_limit=2,
         report_to="none",
         push_to_hub=True,
         hub_model_id=output_repo,
         hub_token=HF_TOKEN,
-        hub_strategy="end",
+        hub_strategy="every_save",
     )
 
     trainer = SFTTrainer(
@@ -143,7 +144,15 @@ def main() -> None:
         processing_class=tokenizer,
     )
 
-    trainer.train()
+    has_checkpoint = os.path.isdir(sft_config.output_dir) and any(
+        name.startswith("checkpoint-")
+        for name in os.listdir(sft_config.output_dir)
+    )
+    if has_checkpoint:
+        print("[train] resuming from existing checkpoint in output_dir")
+    else:
+        print("[train] no existing checkpoint found; starting fresh")
+    trainer.train(resume_from_checkpoint=True if has_checkpoint else None)
     trainer.push_to_hub()
     print(json.dumps({"status": "complete", "output_repo": output_repo}))
 
