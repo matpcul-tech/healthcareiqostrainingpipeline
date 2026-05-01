@@ -58,8 +58,20 @@ def main() -> None:
     print(f"[train] dataset={DATASET_REPO} split={TRAIN_SPLIT}")
     print(f"[train] output_repo={output_repo}")
 
-    dataset = load_dataset(DATASET_REPO, split=TRAIN_SPLIT, token=HF_TOKEN)
+    dataset = load_dataset(
+        DATASET_REPO,
+        split=TRAIN_SPLIT,
+        token=HF_TOKEN,
+        trust_remote_code=True,
+        features=None,
+    )
     print(f"[train] dataset rows: {len(dataset)}")
+    print(f"[train] dataset columns: {dataset.column_names}")
+    keep_cols = [c for c in dataset.column_names if c == "messages"]
+    drop_cols = [c for c in dataset.column_names if c not in keep_cols]
+    if drop_cols:
+        dataset = dataset.remove_columns(drop_cols)
+        print(f"[train] dropped columns: {drop_cols}")
 
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
