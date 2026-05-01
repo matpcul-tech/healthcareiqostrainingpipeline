@@ -128,7 +128,7 @@ def main() -> None:
         packing=False,
         logging_steps=10,
         save_strategy="steps",
-        save_steps=100,
+        save_steps=500,
         save_total_limit=2,
         report_to="none",
         push_to_hub=True,
