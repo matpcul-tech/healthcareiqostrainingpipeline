@@ -202,21 +202,5 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  return NextResponse.json({
-    status: 'AutoTrain endpoint active',
-    runtime: 'nodejs',
-    maxDuration: 300,
-    method: 'POST to start an AutoTrain LLM SFT fine-tuning job. Body fields are all optional and override the defaults below.',
-    defaults: {
-      projectName: PROJECT_NAME,
-      baseModel: BASE_MODEL,
-      dataset: DATASET,
-      trainSplit: TRAIN_SPLIT,
-      hardware: HARDWARE,
-      task: TASK,
-      params: DEFAULT_PARAMS,
-      columnMapping: COLUMN_MAPPING,
-    },
-    requires: 'HF_TOKEN environment variable on the server.',
-  });
+  return runAutotrainJob({});
 }
