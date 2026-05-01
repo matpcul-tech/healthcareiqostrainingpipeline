@@ -38,10 +38,10 @@ TRAIN_SPLIT = os.environ.get("TRAIN_SPLIT", "train")
 OUTPUT_REPO = os.environ.get("OUTPUT_REPO", "")
 
 EPOCHS = int(os.environ.get("EPOCHS", "3"))
-BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "8"))
-GRAD_ACCUM = int(os.environ.get("GRADIENT_ACCUMULATION", "2"))
+BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "4"))
+GRAD_ACCUM = int(os.environ.get("GRADIENT_ACCUMULATION", "4"))
 LEARNING_RATE = float(os.environ.get("LEARNING_RATE", "2e-4"))
-MAX_SEQ_LEN = int(os.environ.get("MAX_SEQ_LEN", "2048"))
+MAX_SEQ_LEN = int(os.environ.get("MAX_SEQ_LEN", "512"))
 LORA_R = int(os.environ.get("LORA_R", "16"))
 LORA_ALPHA = int(os.environ.get("LORA_ALPHA", "32"))
 
@@ -124,6 +124,7 @@ def main() -> None:
         lr_scheduler_type="linear",
         warmup_ratio=0.03,
         max_length=MAX_SEQ_LEN,
+        gradient_checkpointing=False,
         packing=False,
         logging_steps=10,
         save_strategy="steps",
